@@ -6,11 +6,14 @@
 # At a rate of 1.0, a 300 stamina horse sprints for 15 seconds.
 depletion-rate: 1.0
 
+# At a scale of 0.05, it take 0.8s for horse to slow down to walking speed
+deceleration-scale: 0.05
+
 # Speed Modifiers
 # Minecraft uses an ADD_SCALAR formula: Final Speed = Base Speed * (1 + Modifier)
 speed-modifiers:
   # 0.1 results in 1.1x speed
-  sprint: 0.1
+  sprint: 0
   # -0.2 results in 0.8x speed
   walk: -0.2
   # -0.4 results in 0.6x speed
