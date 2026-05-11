@@ -9,3 +9,7 @@ New Features:
 + Breeding: Rewrites the vanilla breeding system for a more realistic breeding experience based on genetic combinations
 + Stamina Bar: See the Stamina Consumption at realtime
 + Size: Size related genetic traits
+
+#Commands
+/staminabar <Player>
+Enable or Disable the Ability for Player to see StaminaBar
