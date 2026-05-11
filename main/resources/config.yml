@@ -1,0 +1,20 @@
+# ========================================== #
+#        HorseStamina Configuration          #
+# ========================================== #
+
+# How much stamina is consumed per tick while sprinting.
+# At a rate of 0.05, a 30 health horse sprints for 30 seconds.
+depletion-rate: 0.05
+
+# At a scale of 0.01, it take 3s for horse to slow down to walking speed
+deceleration-scale: 0.02
+
+# Speed Modifiers
+# Minecraft uses an ADD_SCALAR formula: Final Speed = Base Speed * (1 + Modifier)
+speed-modifiers:
+  # 0.1 results in 1.1x speed
+  sprint: 0.1
+  # -0.2 results in 0.8x speed
+  walk: -0.2
+  # -0.4 results in 0.6x speed
+  exhausted: -0.4

@@ -1,0 +1,10 @@
+main: com.betterhorse.betterhorse
+version: 1.0
+name: betterhorse
+author: orkasool
+api-version: 1.21
+commands:
+  staminabar:
+    description: Toggles a player's ability to see the horse stamina bar.
+    usage: /staminabar <player>
+    permission: betterhorse.admin
