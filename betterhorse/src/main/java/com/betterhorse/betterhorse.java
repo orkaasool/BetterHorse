@@ -17,6 +17,10 @@ public class betterhorse extends JavaPlugin {
         
         getServer().getPluginManager().registerEvents(new HorseListener(staminaManager), this);
 
+        if (getCommand("staminabar") != null) {
+            getCommand("staminabar").setExecutor(new StaminaCommand(staminaManager));
+            }
+
         new BukkitRunnable() {
             @Override
             public void run() {

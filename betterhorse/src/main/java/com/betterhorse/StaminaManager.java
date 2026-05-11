@@ -26,9 +26,10 @@ public class StaminaManager {
     private final NamespacedKey currentStaminaKey;
     private final NamespacedKey lastTickKey;
     private final NamespacedKey exhaustedStateKey;
-    
+    private final NamespacedKey sprintMultiplierKey;
     private final NamespacedKey speedModifierKey;
     private final NamespacedKey playerFovModifierKey;
+    public final NamespacedKey seeBarKey;
 
     // Fixed tuning variables
     private final double BASE_RECOVERY = 0.1;  
@@ -41,35 +42,60 @@ public class StaminaManager {
     private final double SPEED_SPRINTING;
     private final double SPEED_WALKING;
     private final double SPEED_EXHAUSTED;
-    private final double MOMENTUM_TICK_SCALE; // Controls the curve of the t^3 deceleration
+    private final double MOMENTUM_TICK_SCALE; 
     
     // Player state trackers
     private final Set<UUID> activeSprints = new HashSet<>();
     private final Map<UUID, Double> playerMomentum = new HashMap<>();
     private final Map<UUID, BossBar> playerStaminaBars = new HashMap<>();
+    
+    // Breed variables
+    public final NamespacedKey mutationValueKey;
+    public final NamespacedKey sizeKey;
+    public final double ABSOLUTE_MAX_STAMINA = 300.0;
+    public final double ABSOLUTE_MAX_SPRINT = 1.3;   
+    public final double ABSOLUTE_MAX_SPEED = 0.3375;
 
     public StaminaManager(betterhorse plugin) {
         this.plugin = plugin;
+        this.seeBarKey = new NamespacedKey(plugin, "can_see_stamina");
         this.maxStaminaKey = new NamespacedKey(plugin, "max_stamina");
         this.currentStaminaKey = new NamespacedKey(plugin, "current_stamina");
         this.lastTickKey = new NamespacedKey(plugin, "last_tick");
         this.exhaustedStateKey = new NamespacedKey(plugin, "is_exhausted");
+        this.sprintMultiplierKey = new NamespacedKey(plugin, "sprint_multiplier");
         this.speedModifierKey = new NamespacedKey(plugin, "stamina_speed_state");
         this.playerFovModifierKey = new NamespacedKey(plugin, "horse_sprint_fov");
+        this.mutationValueKey = new NamespacedKey(plugin, "mutation_value");
+        this.sizeKey = new NamespacedKey(plugin, "horse_size");
 
-        this.DEPLETION_RATE = plugin.getConfig().getDouble("depletion-rate", 1.0);
-        this.SPEED_SPRINTING = plugin.getConfig().getDouble("speed-modifiers.sprint", 0);
+        this.DEPLETION_RATE = plugin.getConfig().getDouble("depletion-rate", 0.5);
+        this.SPEED_SPRINTING = plugin.getConfig().getDouble("speed-modifiers.sprint", 0.1);
         this.SPEED_WALKING = plugin.getConfig().getDouble("speed-modifiers.walk", -0.2);
         this.SPEED_EXHAUSTED = plugin.getConfig().getDouble("speed-modifiers.exhausted", -0.4);
-        // Default 0.035 means it takes ~20 ticks (1 second) to decelerate to walking speed
-        this.MOMENTUM_TICK_SCALE = plugin.getConfig().getDouble("momentum-scale", 0.05); 
+        this.MOMENTUM_TICK_SCALE = plugin.getConfig().getDouble("momentum-scale", 0.01); 
+    }
+
+    public double calculateAndSetMutation(Horse horse, double maxStamina, double sprintMultiplier, double speed) {
+        PersistentDataContainer pdc = horse.getPersistentDataContainer();
+        double staminaPerfection = Math.min(1.0, maxStamina / ABSOLUTE_MAX_STAMINA);
+        double sprintPerfection = Math.min(1.0, sprintMultiplier / ABSOLUTE_MAX_SPRINT);
+        double speedPerfection = Math.min(1.0, speed / ABSOLUTE_MAX_SPEED);
+        double totalPerfection = (staminaPerfection + sprintPerfection + speedPerfection) / 3.2;
+        double mutationValue = 1.1*((1.0 - totalPerfection)/(Math.random()+1.0));
+        pdc.set(mutationValueKey, PersistentDataType.DOUBLE, mutationValue);
+        return mutationValue;
     }
 
     public void createStaminaBar(Player player) {
-        // Creates a Green solid bar.
-        BossBar bar = Bukkit.createBossBar("§aHorse Stamina", BarColor.GREEN, BarStyle.SOLID);
+    // Check if the player has the PDC flag OR a bypass permission
+    byte canSee = player.getPersistentDataContainer().getOrDefault(seeBarKey, PersistentDataType.BYTE, (byte) 0);
+    
+    if (canSee == 1 || player.hasPermission("betterhorse.seebar")) {
+        BossBar bar = Bukkit.createBossBar("", BarColor.GREEN, BarStyle.SOLID);
         bar.addPlayer(player);
         playerStaminaBars.put(player.getUniqueId(), bar);
+        }
     }
 
     public void initializeHorse(Horse horse, double maxStamina) {
@@ -79,6 +105,9 @@ public class StaminaManager {
             pdc.set(currentStaminaKey, PersistentDataType.DOUBLE, maxStamina);
             pdc.set(lastTickKey, PersistentDataType.LONG, System.currentTimeMillis());
             pdc.set(exhaustedStateKey, PersistentDataType.BYTE, (byte) 0);
+        }
+        if (!pdc.has(sprintMultiplierKey, PersistentDataType.DOUBLE)) {
+            pdc.set(sprintMultiplierKey, PersistentDataType.DOUBLE, getRandomSprintMultiplier());
         }
     }
 
@@ -90,9 +119,16 @@ public class StaminaManager {
         return 100.0 + (Math.random() * 200.0);
     }
 
+    public double getSprintMultiplier(Horse horse) {
+        return horse.getPersistentDataContainer().getOrDefault(sprintMultiplierKey, PersistentDataType.DOUBLE, getRandomSprintMultiplier());
+    }
+
+    public double getRandomSprintMultiplier() {
+        return 1.0 + (Math.random() * 0.3);
+    }
+
     public void processPlayerInput(Player player, boolean isSprinting) {
         UUID id = player.getUniqueId();
-        
         if (isSprinting) {
             activeSprints.add(id);
         } else {
@@ -105,27 +141,20 @@ public class StaminaManager {
         double max = getMaxStamina(horse);
         double current = pdc.getOrDefault(currentStaminaKey, PersistentDataType.DOUBLE, max);
         boolean isExhausted = pdc.getOrDefault(exhaustedStateKey, PersistentDataType.BYTE, (byte) 0) == (byte) 1;
-
         UUID id = rider.getUniqueId();
         boolean isAttemptingSprint = activeSprints.contains(id);
-        BossBar bar = playerStaminaBars.get(id);
-        
-        // Fetch current momentum (0.0 is walking, 1.0 is full sprint)
         double momentum = playerMomentum.getOrDefault(id, 0.0);
-        
+        BossBar bar = playerStaminaBars.get(id);
         if (bar != null) {
             double ratio = current / max;
             ratio = Math.max(0.0, Math.min(1.0, ratio));
             bar.setProgress(ratio);
         }
-        
         if (isAttemptingSprint && !isExhausted) {
             current -= DEPLETION_RATE;
-            
-            // Build momentum
+            // Building up Momentum, shares the Scale with Decaying
             momentum += MOMENTUM_TICK_SCALE;
             if (momentum > 1.0) momentum = 1.0;
-            
             if (current <= 1) {
                 current = 1;
                 pdc.set(exhaustedStateKey, PersistentDataType.BYTE, (byte) 1);
@@ -136,23 +165,20 @@ public class StaminaManager {
             if (current >= max) {
                 current = max;
             }
-            
-            // Lose momentum
+            // Momentum naturally decays, adjust the rate with Momentum Scale
             momentum -= MOMENTUM_TICK_SCALE;
             if (momentum < 0.0) momentum = 0.0;
-            
             if (isExhausted) {
-                bar.setColor(BarColor.RED);
+                if (bar != null) bar.setColor(BarColor.RED);
                 setSpeedState(horse, SPEED_EXHAUSTED);
                 removePlayerFovZoom(rider);
-                momentum = 0.0; // Force momentum to 0 so they walk upon recovery
-                
+                momentum = 0.0; 
+                // 8% chance to play exhaust sound each tick
                 if (Math.random() < 0.08) {
                     horse.getWorld().playSound(horse.getLocation(), Sound.ENTITY_HORSE_BREATHE, 0.5f, 0.8f);
                 }
-
                 if (current > (max * RECOVERY_THRESHOLD)) {
-                    bar.setColor(BarColor.GREEN);
+                    if (bar != null) bar.setColor(BarColor.GREEN);
                     pdc.set(exhaustedStateKey, PersistentDataType.BYTE, (byte) 0);
                     horse.getWorld().playSound(horse.getLocation(), Sound.ENTITY_HORSE_AMBIENT, 0.8f, 1.2f);
                 }
@@ -160,11 +186,9 @@ public class StaminaManager {
         }
         
         if (!isExhausted) {
-            // Apply your power-of-3 curve to the 0.0 - 1.0 momentum value
             double curveRatio = Math.pow(momentum, 3);
-            
-            // Calculate speed and FOV directly from the single curve
-            double currentSpeed = SPEED_WALKING + ((SPEED_SPRINTING - SPEED_WALKING) * curveRatio);
+            // Speed is calculated with a curve and Sprint Multiplier
+            double currentSpeed = SPEED_WALKING + ((SPEED_SPRINTING * getSprintMultiplier(horse) - SPEED_WALKING) * curveRatio);
             setSpeedState(horse, currentSpeed);
             
             if (curveRatio > 0.0) {
@@ -173,8 +197,6 @@ public class StaminaManager {
                 removePlayerFovZoom(rider);
             }
         }
-        
-        // Save state
         playerMomentum.put(id, momentum);
         pdc.set(currentStaminaKey, PersistentDataType.DOUBLE, current);
         pdc.set(lastTickKey, PersistentDataType.LONG, System.currentTimeMillis());
@@ -229,7 +251,7 @@ public class StaminaManager {
     public void removePlayerState(Player player) {
         UUID id = player.getUniqueId();
         activeSprints.remove(id);
-        playerMomentum.remove(id); // Updated reference
+        playerMomentum.remove(id); 
         BossBar bar = playerStaminaBars.remove(id);
         if (bar != null) {
             bar.removePlayer(player);
