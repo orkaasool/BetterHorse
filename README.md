@@ -14,3 +14,21 @@ New Features:
 /staminabar Player
 
 Enable or Disable the Ability for Player to see StaminaBar
+
+# Config.yml
+
+depletion-rate: 0.5
+
+deceleration-scale: 0.01
+
+speed-modifiers:
+
+  0.1 results in 1.1x speed
+  
+  sprint: 0.1
+  
+  -0.2 results in 0.8x speed
+  
+  walk: -0.2
+  
+  exhausted: -0.4
