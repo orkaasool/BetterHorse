@@ -10,6 +10,6 @@ New Features:
 + Stamina Bar: See the Stamina Consumption at realtime
 + Size: Size related genetic traits
 
-#Commands
-/staminabar <Player>
-Enable or Disable the Ability for Player to see StaminaBar
+# Commands
+/staminabar Player
+to Enable or Disable the Ability for Player to see StaminaBar
