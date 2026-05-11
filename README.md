@@ -12,4 +12,5 @@ New Features:
 
 # Commands
 /staminabar Player
-to Enable or Disable the Ability for Player to see StaminaBar
+
+Enable or Disable the Ability for Player to see StaminaBar
